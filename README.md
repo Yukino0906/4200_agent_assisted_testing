@@ -1,5 +1,8 @@
 # 4200A Agent Kit
 
+> **Setting up on a new PC? Start with [START_HERE.md](START_HERE.md)** (clone, open Claude
+> Code, first message).
+
 MATLAB code and instructions for automated electrical tests of memristive / RRAM devices
 on a probe station with a **Keithley 4200A-SCS** (one SMU, one 4225-PMU, two 4225-RPMs).
 The laptop is the control centre: the kit and, optionally, an AI coding agent (Claude
