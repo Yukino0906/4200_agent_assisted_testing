@@ -76,7 +76,7 @@ fprintf('  tcpclient (no VISA needed) : %s\n', local_yes(report.has_tcpclient));
 if report.has_visadev
     fprintf('  NI-VISA resources          :\n%s\n', local_indent(report.visa_resources));
 end
-fprintf('  IPv4 addresses             :\n%s\n', local_indent(local_ipv4(report.ipconfig)));
+fprintf('  Network adapters           :\n%s\n', local_indent(local_adapters(report.ipconfig)));
 if ~isempty(host)
     fprintf('  ping %-21s : %s\n', host, local_yes(report.ping_ok));
 end
@@ -87,7 +87,8 @@ if ~report.has_visadev && ~report.has_tcpclient
 elseif ~report.has_visadev
     fprintf('  No visadev: use cfg.instrument.transport = ''tcpclient''.\n');
 end
-fprintf('  Next: HANDOFF.md, step 4 (network) and step 6 (test_instrument_connection).\n\n');
+fprintf(['  Next: README.md, Quick start step 3: find the adapter cabled to the 4200A\n' ...
+         '  (a 169.254.x.x address means automatic addressing on both ends).\n\n']);
 
 if nargout == 0
     clear report;
@@ -99,10 +100,13 @@ function s = local_yes(tf)
 if isequal(tf, true); s = 'yes'; else; s = 'NO'; end
 end
 
-function s = local_ipv4(txt)
-% Adapter headings and IPv4 lines only; works for English ipconfig output.
+function s = local_adapters(txt)
+% Adapter headings, their IPv4 lines (including "Autoconfiguration IPv4", the
+% 169.254.x.x address Windows picks when nothing assigns one) and "Media
+% disconnected" lines. Written for English ipconfig output; anything else is
+% printed whole.
 lines = splitlines(string(txt));
-keep = startsWith(strtrim(lines), "IPv4") | ...
+keep = contains(lines, "IPv4") | contains(lines, "Media disconnected") | ...
        (strlength(lines) > 0 & ~startsWith(lines, " ") & endsWith(strtrim(lines), ":"));
 s = char(strjoin(lines(keep), newline));
 if isempty(strtrim(s)); s = char(txt); end

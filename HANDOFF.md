@@ -2,7 +2,8 @@
 
 最后更新：2026-11-24。读者：实验室电脑上的 Claude Code，以及使用者本人。
 原工作机上的会话记忆不会跟过来；这里写的就是全部上下文。**做出新决定或核对出新结果，
-就更新本文件并 commit。** 安装、clone 和第一条消息见 [START_HERE.md](START_HERE.md)。
+就更新本文件并 commit。** 通用的初始化流程（任意电脑 + 已用网线接好的 4200A）在
+[README.md](README.md) 的 Quick start。
 
 ## 0. 当前状态
 

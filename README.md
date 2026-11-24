@@ -1,7 +1,50 @@
 # 4200A Agent Kit
 
-> **Setting up on a new PC? Start with [START_HERE.md](START_HERE.md)** (clone, open Claude
-> Code, first message).
+## Quick start: a PC already cabled to a 4200A
+
+For any Windows PC that is already connected to a 4200A-SCS by an Ethernet cable:
+
+1. Clone this repository on the PC (the PC needs internet for Git and Claude Code):
+   `git clone https://github.com/Yukino0906/4200_agent_assisted_testing.git`
+2. Open Claude Code in the cloned folder.
+3. Send this one message:
+
+```text
+Set up this PC and the connected 4200A by following the Quick start in README.md.
+```
+
+**What the agent then does** (in this order; it stops and asks before anything that touches
+the instrument or a network setting):
+
+1. Reads [AGENTS.md](AGENTS.md), [docs/05_safety.md](docs/05_safety.md) and
+   [docs/07_bring_up.md](docs/07_bring_up.md), plus [HANDOFF.md](HANDOFF.md) if this repository
+   carries the record of a particular lab setup.
+2. Finds MATLAB (`where matlab`; otherwise asks for the path of `matlab.exe`) and runs
+   `matlab -batch "cd('<repo>'); check_setup"` in the background with a 15-minute timeout.
+   It reports the MATLAB version, whether the Instrument Control Toolbox and NI-VISA are
+   available, whether `test_dry_run` ends with 0 failed, and every network adapter's IPv4.
+3. Identifies the adapter that carries the cable to the 4200A and its address:
+   - `169.254.x.x` — both ends are on automatic addressing and can usually reach each
+     other without any change. The 4200A's own `169.254` address (from `ipconfig` on the
+     4200A) is the host.
+   - a static address — the 4200A must sit in the same subnet.
+   - otherwise it proposes the static plan from [docs/01_setup.md](docs/01_setup.md)
+     (PC `192.168.0.1`, 4200A `192.168.0.2`, mask `255.255.255.0`, no gateway on that
+     adapter) and waits. Settings on the 4200A are changed by the user or its administrator.
+4. Asks for the 4200A's IP, then `ping`s it.
+5. Walks the user through the 4200A side: KCon → KXCI Settings → Ethernet, note the port
+   (Keithley's examples use 1225); close Clarius; start KXCI.
+6. With the user's go-ahead, runs `test_instrument_connection` (0 V only; host, port and
+   `resource_candidates` set together, see [HANDOFF.md](HANDOFF.md) section 6 if present)
+   and reports the identity and the raw acknowledge reply.
+7. Next step: the resistor bring-up in [docs/07_bring_up.md](docs/07_bring_up.md). No device
+   is touched before it passes.
+
+Until the user explicitly agrees, the agent does not connect to the instrument, enable any
+output, or change a network setting on either computer. Not cabled yet? See
+[docs/01_setup.md](docs/01_setup.md).
+
+## About the kit
 
 MATLAB code and instructions for automated electrical tests of memristive / RRAM devices
 on a probe station with a **Keithley 4200A-SCS** (one SMU, one 4225-PMU, two 4225-RPMs).
@@ -45,8 +88,7 @@ exist to rehearse and to test the code, not to predict a device or the real inst
 
 `check_setup` (or `check_setup('<4200A IP>')`) checks MATLAB, the Instrument Control
 Toolbox, NI-VISA, the network adapters and the regression suite, without contacting the
-instrument. The state of this particular setup and the next steps are in
-[HANDOFF.md](HANDOFF.md).
+instrument. The Quick start above uses it as its first step.
 
 ## First time on the real instrument
 
