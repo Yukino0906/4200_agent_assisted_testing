@@ -1,10 +1,12 @@
 function result = example_custom_test_skeleton(cfg, inst)
 %EXAMPLE_CUSTOM_TEST_SKELETON  Template for a NEW test: arbitrary pulse sequence, read after each.
 %
-%   COPY THIS FILE to src/measurement/run_<name>_test.m when no existing test
-%   fits a request, rename the function, and change only the parts marked
-%   "TEST-SPECIFIC". Everything else is the safety skeleton every test in the
-%   kit shares; do not remove any of it.
+%   COPY THIS FILE when no existing test fits a request: to
+%   users/<you>/tests/run_<name>_test.m for a test of your own, or to
+%   src/measurement/run_<name>_test.m for a test meant for every user
+%   (AGENTS.md section 5). Rename the function, and change only the parts
+%   marked "TEST-SPECIFIC". Everything else is the safety skeleton every test
+%   in the kit shares; do not remove any of it.
 %
 %   As shipped it is a usable test in its own right: it applies the pulses
 %   listed in cfg.sequence one by one and reads G after each, e.g. a

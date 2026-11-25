@@ -435,6 +435,113 @@ catch e
 end
 
 % ======================================================================
+fprintf('\n--- Instrument lock (one controller at a time) ---\n');
+% Temporary lock files only; the kit's real lock file is never touched.
+lf = [tempname '_instrument_lock.json'];
+try
+    i1 = instrument_lock('acquire', lf, struct('user', 'alice'));
+    i2 = instrument_lock('acquire', lf, struct('user', 'alice'));   % same MATLAB again
+    st = instrument_lock('status', lf);
+    record('lock: acquire, re-acquire by the same MATLAB, status', ...
+        exist(lf, 'file') == 2 && strcmp(i1.user, 'alice') && ~i2.took_over_stale && ...
+        ~isempty(st) && st.alive, '');
+    instrument_lock('release', lf);
+    record('lock: release by the holder removes it', exist(lf, 'file') ~= 2, '');
+
+    local_fake_lock(lf, 'bob', 'OTHER-PC', 12344);   % a holder this PC cannot check = running
+    try
+        instrument_lock('acquire', lf, struct('user', 'alice'));
+        record('lock: held by a running controller is refused', false, 'no error');
+    catch e
+        record('lock: held by a running controller is refused', ...
+            strcmp(e.identifier, 'instrument_lock:InUse'), e.identifier);
+    end
+    try
+        instrument_lock('acquire', lf, struct('user', 'alice'), true);
+        record('lock: a running controller is never taken over', false, 'no error');
+    catch e
+        record('lock: a running controller is never taken over', ...
+            strcmp(e.identifier, 'instrument_lock:InUse'), e.identifier);
+    end
+    instrument_lock('release', lf);
+    record('lock: release by a non-holder leaves it in place', exist(lf, 'file') == 2, '');
+
+    gone = @(h) false;                                % the holder's MATLAB no longer runs
+    try
+        instrument_lock('acquire', lf, struct('user', 'alice'), false, gone);
+        record('lock: stale lock is refused', false, 'no error');
+    catch e
+        record('lock: stale lock is refused', strcmp(e.identifier, 'instrument_lock:Stale'), e.identifier);
+    end
+    i3 = instrument_lock('acquire', lf, struct('user', 'alice'), true, gone);
+    record('lock: stale lock taken over only with allowStale', ...
+        i3.took_over_stale && strcmp(i3.previous.user, 'bob') && strcmp(i3.user, 'alice'), '');
+    instrument_lock('release', lf);
+
+    % connect_instruments must refuse BEFORE it opens any socket.
+    cfgL = cfg;
+    cfgL.mode.simulate_instrument = false;
+    cfgL.instrument.transport     = 'tcpclient';
+    cfgL.instrument.host          = '127.0.0.1';      % never the 4200A
+    cfgL.instrument.port          = 1;
+    cfgL.instrument.lock_file     = lf;
+    local_fake_lock(lf, 'bob', 'OTHER-PC', 12344);
+    try
+        connect_instruments(cfgL);
+        record('connect refuses while another session holds the 4200A', false, 'no error');
+    catch e
+        record('connect refuses while another session holds the 4200A', ...
+            strcmp(e.identifier, 'instrument_lock:InUse'), e.identifier);
+    end
+    delete(lf);
+
+    % A failed connection must not leave the lock behind.
+    try
+        connect_instruments(cfgL);   % nothing listens on 127.0.0.1:1
+        record('failed connect releases the lock', false, 'connected unexpectedly');
+    catch e
+        record('failed connect releases the lock', ...
+            strcmp(e.identifier, 'connect_instruments:AllFailed') && exist(lf, 'file') ~= 2, ...
+            sprintf('%s, lock file left = %d', e.identifier, exist(lf, 'file') == 2));
+    end
+catch e
+    record('instrument lock', false, sprintf('%s: %s', e.identifier, e.message));
+end
+if exist(lf, 'file') == 2; delete(lf); end
+
+% ======================================================================
+fprintf('\n--- Non-ASCII device names (user data may use any language) ---\n');
+% Built from code points so this source file stays ASCII:
+% U+6837 U+54C1 (Chinese "sample"), U+C2DC U+B8CC (Korean "sample").
+tmpRoot = tempname;
+try
+    cfgU = cfg;
+    cfgU.device.device_id = [char([26679 21697]) 'A_' char([49884 47308]) '_R1C1'];
+    cfgU.device.G_hrs_S   = NaN;
+    cfgU.device.G_lrs_S   = NaN;
+    cfgU.data_root        = tmpRoot;
+    cfgU.raw_root         = fullfile(tmpRoot, 'raw');
+    cfgU.metadata_root    = fullfile(tmpRoot, 'metadata');
+    cfgU.log_root         = fullfile(tmpRoot, 'logs');
+    cfgU.dc.num_cycles    = 1;
+    ru = run_dc_cycle_test(cfgU);
+    [~, dname] = fileparts(ru.run_dir);
+    T    = load_run_csv(ru);
+    meta = jsondecode(fileread(fullfile(ru.run_dir, 'metadata.json')));
+    [~, ~, src] = get_conductance_window(cfgU);
+    okDir  = contains(dname, cfgU.device.device_id);
+    okCsv  = all(strcmp(string(T.device_id), string(cfgU.device.device_id)));
+    okMeta = strcmp(meta.device.device_id, cfgU.device.device_id);
+    okWin  = startsWith(src, 'dc_metadata');
+    record('non-ASCII device_id kept in run dir, CSV, metadata and window lookup', ...
+        okDir && okCsv && okMeta && okWin, ...
+        sprintf('dir=%d csv=%d meta=%d window=%s', okDir, okCsv, okMeta, src));
+catch e
+    record('non-ASCII device_id', false, sprintf('%s: %s', e.identifier, e.message));
+end
+if exist(tmpRoot, 'dir') == 7; rmdir(tmpRoot, 's'); end
+
+% ======================================================================
 fprintf('\n================================================================\n');
 fprintf(' DRY RUN SUMMARY: %d passed, %d failed\n', passed, failed);
 if failed > 0
@@ -453,6 +560,16 @@ ok = (failed == 0);
 if nargout == 0
     clear ok;
 end
+end
+
+% ========================================================================
+function local_fake_lock(path, user, host, pid)
+%LOCAL_FAKE_LOCK  Write a lock file as if another session held the 4200A.
+s = struct('user', user, 'os_user', 'someone', 'host', host, 'pid', pid, ...
+           'since', '2026-01-01 00:00:00', 'note', '');
+fid = fopen(path, 'w');
+fprintf(fid, '%s', jsonencode(s));
+fclose(fid);
 end
 
 % ========================================================================

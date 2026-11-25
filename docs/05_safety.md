@@ -21,6 +21,7 @@ compliance.**
 | Duration limit | `set_voltage`, `apply_voltage_pulse` | Stops at `cfg.safety.max_test_duration` per run |
 | Contact check | `check_contact`, `test_read_only` | 50 mV probe: open / short / ok, before any high voltage |
 | Output-off guard | `begin_measurement` (`onCleanup`) | PMU off, SMU 0 V and off on any exit: normal, error, Ctrl+C |
+| One-controller lock | `connect_instruments` / `instrument_lock` | A second MATLAB session (another user) cannot connect while one is connected (`instrument_lock:InUse`). A lock left by a killed MATLAB blocks every connection until `test_instrument_connection` runs (`instrument_lock:Stale`) |
 | Emergency shutdown | `emergency_shutdown` → `kxci_force_safe` | Every output off, session marked aborted; an aborted session refuses all further bias |
 
 ## 2. Rules for everyone (people and agents)
@@ -99,6 +100,8 @@ and the device.
 | A checkpoint asks to proceed and you are unsure | Answer anything other than `y`. The test stops cleanly. |
 | MATLAB was killed (Task Manager, agent killed the process, tool timeout) | `onCleanup` did **not** run. Start MATLAB and run `setup_paths; test_instrument_connection`. It resets the 4200A and turns every PMU and SMU output off. Then check the KXCI window for errors. |
 | Cannot connect / connection refused | KXCI not running, Clarius holding the hardware, wrong port, or an earlier MATLAB still holds the socket. Close it, restart KXCI if needed, connect again. |
+| `instrument_lock:InUse` | Another session (the message names the user) is connected. Wait until it disconnects. Do not delete `data/instrument_lock.json`. |
+| `instrument_lock:Stale` | The MATLAB that held the 4200A no longer runs (killed or crashed); its outputs may still be on. Run `setup_paths; test_instrument_connection`: it takes the lock over, turns every output off and releases it. |
 | Every command reported as "not acknowledged" | `cfg.instrument.ack_pattern` does not match the instrument's reply ([07_bring_up.md](07_bring_up.md), item A). Stop and fix the setting; do not continue with errors. |
 | Session reports `aborted` | Read `inst.LastError` and the run log. A new run needs a new connection; nothing resumes automatically. |
 | Unsure whether a background run is alive | Look at whether `measurement_data.csv` / `instrument_log.txt` in the newest run directory are still growing. Crashed MATLAB processes can stay in the process list. |

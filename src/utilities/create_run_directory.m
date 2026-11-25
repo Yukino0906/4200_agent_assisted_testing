@@ -5,6 +5,8 @@ function run = create_run_directory(cfg, test_name)
 %       <cfg.raw_root>\<yyyy-mm-dd_HHMMSS>_device_<id>_<test_name>\
 %   and returns a struct of absolute paths. Every measurement function writes
 %   exclusively inside this directory so that a crash never mixes runs.
+%   <id> keeps letters of any language (e.g. a Chinese or Korean device_id);
+%   only characters Windows forbids in file names and whitespace become '_'.
 %
 %   Inputs:
 %       cfg       - configuration struct (default_config)
@@ -77,8 +79,13 @@ end
 
 % ------------------------------------------------------------------------
 function s = local_sanitize(s)
+% Keep letters of any script, so users can name devices in their own
+% language (Chinese, Korean, ...). Replace only what Windows does not allow
+% in a file name, whitespace and control characters; drop trailing dots.
 s = char(s);
-s = regexprep(s, '[^A-Za-z0-9_\-]', '_');
+s = regexprep(s, '[<>:"/\\|?*\s]', '_');
+s(double(s) < 32) = '_';
+s = regexprep(s, '\.+$', '');
 if isempty(s); s = 'x'; end
 end
 

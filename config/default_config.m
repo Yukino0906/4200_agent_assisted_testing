@@ -20,8 +20,9 @@ function cfg = default_config()
 %
 %   THE VALUES BELOW ARE CONSERVATIVE STARTING POINTS, NOT DEVICE PARAMETERS.
 %   They are sized so that the dry-run simulator exercises every code path.
-%   For a real device, copy config/device_TEMPLATE.m, set every field it
-%   marks as REQUIRED from your own measurements, and pass that cfg on.
+%   For a real device, copy config/device_TEMPLATE.m to
+%   users/<you>/config/, set every field it marks as REQUIRED from your own
+%   measurements, and pass that cfg on (see users/README.md).
 %
 %   HOW TO CUSTOMISE
 %       Do NOT edit measurement functions. Either copy device_TEMPLATE.m, or:
@@ -46,6 +47,10 @@ cfg.data_root     = fullfile(cfg.project_root, 'data');
 cfg.raw_root      = fullfile(cfg.data_root, 'raw');
 cfg.metadata_root = fullfile(cfg.data_root, 'metadata');
 cfg.log_root      = fullfile(cfg.data_root, 'logs');
+% Owner of the run: a folder name under users/. '' = kit-level run (data/
+% above). apply_user_folder(cfg, '<name>') sets it and moves the four data
+% paths to users/<name>/data/.
+cfg.user          = '';
 
 % ------------------------------------------------------------------------
 %% Instrument  (Keithley 4200A-SCS through KXCI, Ethernet or GPIB)
@@ -60,9 +65,15 @@ cfg.log_root      = fullfile(cfg.data_root, 'logs');
 %   'visa'      visadev + NI-VISA. Ethernet raw socket or GPIB resource.
 %   'tcpclient' plain MATLAB TCP socket, no NI-VISA (Ethernet only).
 %   'mock'      software stand-in (KxciMock), for testing without hardware.
-cfg.instrument.transport           = 'visa';
-cfg.instrument.host                = '192.168.0.2';   % 4200A IP (set it, see docs/01_setup.md)
-cfg.instrument.port                = 1225;            % KXCI port from KCon (Keithley examples use 1225)
+% Transport, host and port belong to THIS SETUP, not to a device: device
+% files inherit them from here, so a new 4200A address is changed here only.
+% This lab PC (2026-11-24): no Instrument Control Toolbox -> 'tcpclient'.
+% The 4200A's direct-cable adapter ("Ethernet 4", I219-LM) has no static IP;
+% Windows gave it the link-local address below. It can change when the 4200A
+% restarts: run ipconfig on the 4200A and update host here (HANDOFF.md).
+cfg.instrument.transport           = 'tcpclient';
+cfg.instrument.host                = '169.254.66.232'; % 4200A IP, direct cable (see above)
+cfg.instrument.port                = 5230;            % KXCI port from KCon on this 4200A (2026-11-24; Keithley examples use 1225)
 cfg.instrument.resource_candidates = { ...
     sprintf('TCPIP0::%s::%d::SOCKET', cfg.instrument.host, cfg.instrument.port)};
 %   GPIB alternative: {"GPIB0::17::INSTR"} with terminator "LF" and ack_mode false.
@@ -80,6 +91,12 @@ cfg.instrument.ack_pattern       = '^ACK';      % regexp a good acknowledge matc
 cfg.instrument.error_query       = '';          % UNVERIFIED; leave empty until confirmed
 cfg.instrument.no_error_pattern  = '^0';        % regexp of a "no error" reply to it
 cfg.instrument.check_errors      = true;        % check acknowledges after command bursts
+% One controller at a time (several people share this PC): connect_instruments
+% claims this lock before opening a real transport, disconnect_instruments
+% releases it. Kit-level path, the same for every user. Only
+% test_instrument_connection may take over a lock left by a killed MATLAB.
+cfg.instrument.lock_file         = fullfile(cfg.project_root, 'data', 'instrument_lock.json');
+cfg.instrument.lock_allow_stale  = false;
 
 % Hardware map: ONE SMU (reads, DC sweeps), ONE 4225-PMU with two 4225-RPMs.
 % The SMU reaches the device through the SMU input of the force-channel RPM.

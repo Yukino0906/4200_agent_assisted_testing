@@ -14,8 +14,9 @@ function disconnect_instruments(inst)
 %
 %   Outputs: none.
 %
-%   Instrument side effects: outputs OFF at 0 V, connection closed. The RPM
-%   path is left as it is.
+%   Instrument side effects: outputs OFF at 0 V, connection closed, the
+%   one-controller lock (INSTRUMENT_LOCK) released. The RPM path is left as
+%   it is.
 %
 %   Exceptions: none by design.
 %
@@ -60,6 +61,15 @@ try
     inst.Dev       = [];
     inst.Connected = false;
     inst.OutputOn  = false;
+catch
+end
+
+% Release the one-controller lock (real transports only; see INSTRUMENT_LOCK).
+try
+    if ~inst.Simulate && ~strcmpi(inst.Transport, 'mock') && ...
+            isfield(inst.Cfg.instrument, 'lock_file') && ~isempty(inst.Cfg.instrument.lock_file)
+        instrument_lock('release', inst.Cfg.instrument.lock_file);
+    end
 catch
 end
 

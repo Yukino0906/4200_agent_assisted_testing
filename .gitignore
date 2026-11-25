@@ -1,2 +1,12 @@
+# Measurement data never goes into git. "data/" matches at any depth:
+# the kit's data/ (runs, logs, the instrument lock file) and every users/<name>/data/.
 data/
 *.asv
+
+# Personal user folders stay on the lab PC. Only the shared parts of users/ are
+# tracked: users/README.md, users/sync_users.ps1 and users/_TEMPLATE/.
+users/*/
+!users/_TEMPLATE/
+
+# Claude Code per-person local settings.
+.claude/settings.local.json

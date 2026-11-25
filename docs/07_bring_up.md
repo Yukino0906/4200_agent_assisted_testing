@@ -14,6 +14,9 @@ fill in the record at the bottom.
 - A device file for the resistor. Copy `config/device_TEMPLATE.m` to
   `config/device_RES_bringup.m`, rename the function, and set:
 
+  The bring-up checks the setup, not anyone's device, so this file stays in `config/` and
+  its owner line keeps `cfg = apply_user_folder(cfg, '');`: its runs go to the kit's `data/`.
+
 ```matlab
 cfg.device.device_id        = 'RES_100k_bringup';
 cfg.safety.max_abs_voltage  = 1.5;
@@ -50,15 +53,15 @@ per setup.
 
 | Item | Date | Who | Result | Settings changed |
 |---|---|---|---|---|
-| A | | | | |
-| B | | | | |
-| C | | | | |
+| A | 2026-11-24 | agent (Claude Code), operator present, probes up | PASS. `*IDN?` → `KEITHLEY INSTRUMENTS,KI4200A,<serial>,V1.12`; reply to `BC` = `ACK`, matches `^ACK`; 12 commands, all `ACK` (incl. `:PMU:OUTPUT:STATE 1, 0`), 0 not acknowledged. tcpclient, 169.254.66.232:5230, terminator NUL | none (`ack_pattern` kept). Setup: `transport = 'tcpclient'`, host, port 5230 in `default_config.m` |
+| B | 2026-11-24 | agent (Claude Code), operator approved spec; nominal R withheld (> 1 kΩ) | **Not passed — open circuit.** `run_dc_cycle_test` with `config/device_RES_bringup.m` (SMU only, PMU disabled, ±0.5 V, 1 mA): I stayed at −14…−16.5 pA over the whole sweep (fit 5.9e11 Ω; read at −0.1 V: −20 pA). `TI1` reply form verified: `NAI-14.74702E-12` (status N, channel A, current). No compliance, outputs off at the end. Run `data/raw/2026-11-24_183558_device_RES_blind_bringup_dc_cycle_test`. **Run 2** (18:40, operator re-landed / rewired, same spec): points 1–26 (0 → +0.5 → −0.25 V) poor contact, 3.0–6.5 MΩ and noisy; from point 27 (−0.30 V, t = 14.8 s) contact became good and stayed: **R = 221.6 kΩ** (fit 221,597 Ω ± 38 Ω stat., R² = 0.9999996, offset −0.1 nA; V/I 221.25–221.64 kΩ; read at −0.1 V 221.25 kΩ, current negative ✓). Only the negative polarity was measured with good contact. Run `data/raw/2026-11-24_184002_device_RES_blind_bringup_dc_cycle_test`, plot `resistor_fit_good_contact.png`. Operator then gave the nominal value: **221 kΩ** → deviation **+0.27 %** (limit 2 %). **PASS** for the SMU read path (negative branch and −0.1 V read). **Run 3** (18:50, same spec, good contact throughout): whole loop linear, R = 221.53 kΩ (R² = 0.9999997, offset −0.7 nA); positive branch 221.72 kΩ, negative 221.44 kΩ (differ 0.13 %); −0.1 V read 221.05 kΩ; current positive at +V, negative at −V. All within +0.33 % of 221 kΩ. Run `data/raw/2026-11-24_185027_device_RES_blind_bringup_dc_cycle_test` | none |
+| C | 2026-11-24 | — | Not applicable on this wiring: the SMU goes straight to probe 1, no RPM in the path; and V1.12 has no `:PMU:RPM:CONFIGURE` | — |
 | D | | | | |
 | E | | | | |
 | F | | | | |
 | G | | | | |
 | H | | | | |
-| I | | | | |
+| I | 2026-11-24 | agent (Claude Code), operator present, probes up, outputs off | **FAIL**: `XX9` answered `ACK`, `kxci_check_errors` → n = 0. Follow-up `BC` → `ACK` (replies stay in step). KXCI acknowledges unknown commands, so `ACK` means "received", not "accepted". Log `data/logs/bringup_item_I.log`. The KXCI window on the 4200A shows `ERROR: KXCI command error. (-992)` for `XX9` and also for `:PMU:OUTPUT:STATE 1, 0` (both runs); SRQ lamp lit. The instrument notices, the kit cannot read it yet | none yet. Next: find the KXCI error query in 4200A-KXCI-907-01, set `error_query` / `no_error_pattern`, repeat |
 
 When an item changes a setting, change it in `config/default_config.m` (it is a property of
 the setup, not of a device), update [04_kxci_cheatsheet.md](04_kxci_cheatsheet.md) from

@@ -1,9 +1,11 @@
 function cfg = device_TEMPLATE()
 %DEVICE_TEMPLATE  Per-device configuration. COPY this file for every new device.
 %
-%   1. Copy to config/device_<sample>_<R#C#>_<purpose>.m, e.g.
-%      device_chipA_R9C9_iv.m, and rename the function on the first line to
-%      match the file name.
+%   1. Copy to users/<you>/config/device_<sample>_<R#C#>_<purpose>.m, e.g.
+%      users/alice/config/device_chipA_R9C9_iv.m, rename the function on the
+%      first line to match the file name, and put your folder name in the
+%      apply_user_folder line below (see users/README.md). Kit-level files,
+%      such as the resistor bring-up, stay in config/ with owner ''.
 %   2. Fill in every field marked REQUIRED. Start conservative: low voltage,
 %      low compliance, few cycles. Raise values only with evidence from a
 %      previous run on the SAME device.
@@ -16,13 +18,19 @@ function cfg = device_TEMPLATE()
 %   thresholds, windows and read bias all differ from device to device.
 %
 %   Usage:
-%       setup_paths
+%       setup_paths('alice')
 %       cfg = device_chipA_R9C9_iv();
 %       r = run_dc_cycle_test(cfg);
 %
-%   See also DEFAULT_CONFIG, VALIDATE_CONFIG.
+%   See also DEFAULT_CONFIG, VALIDATE_CONFIG, APPLY_USER_FOLDER.
 
 cfg = default_config();
+
+% ---- owner (REQUIRED in a user's file) -------------------------------------
+% Folder under users/ that owns this device: its runs are saved in
+% users/<owner>/data/. A file stored in users/<name>/ must give <name>;
+% '' = kit-level run, saved in data/ (only for files kept in config/).
+cfg = apply_user_folder(cfg, '');
 
 % ---- identity (REQUIRED) -------------------------------------------------
 cfg.device.device_id = 'SAMPLE_RxCy_purpose';   % REQUIRED, unique per device+purpose
@@ -67,13 +75,9 @@ cfg.pmu.rise_time          = 100e-9;   % [s]
 cfg.pmu.fall_time          = 100e-9;   % [s]
 cfg.pmu.no_compliance_acknowledged = false;   % OPERATOR ONLY, see section 3
 
-% ---- connection and wiring (see docs/01_setup.md) ---------------------------
-cfg.instrument.transport   = 'visa';           % 'visa' | 'tcpclient'
-cfg.instrument.host        = '192.168.0.2';    % the 4200A's IP address
-cfg.instrument.port        = 1225;             % KXCI port set in KCon
-cfg.instrument.resource_candidates = { ...
-    sprintf('TCPIP0::%s::%d::SOCKET', cfg.instrument.host, cfg.instrument.port)};
-cfg.instrument.resource    = cfg.instrument.resource_candidates{1};
+% ---- wiring (see docs/01_setup.md) -------------------------------------------
+% The connection (transport, 4200A address, port) is a property of the setup
+% and comes from config/default_config.m. Do not copy it into device files.
 cfg.instrument.return_path = 'gndu';           % 'gndu' | 'pmu_sense'
 
 % ---- conductance window ----------------------------------------------------

@@ -7,7 +7,8 @@ All tests share:
 
 - **Call:** `r = run_<test>(cfg)` or the example wrapper `r = example_<test>(cfg)`, which also
   plots. With no argument, an example runs on the simulator.
-- **Output directory:** `data/raw/<yyyy-mm-dd_HHMMSS>_device_<id>_<test>/` containing
+- **Output directory:** `users/<owner>/data/raw/<yyyy-mm-dd_HHMMSS>_device_<id>_<test>/`
+  (`data/raw/...` for kit-level runs) containing
   `measurement_data.csv` (one row per measurement, written as it happens),
   `metadata.json/.mat` (instrument, config, status), `run_summary.txt`,
   `instrument_log.txt` (every KXCI command and reply), `config_snapshot.*`, and the example's PNG.
@@ -255,8 +256,9 @@ times, not the schedule: the first read cannot come earlier than one read durati
 ## Building something else
 
 Copy `examples/example_custom_test_skeleton.m` (an arbitrary pulse sequence with a read
-after each pulse) to `src/measurement/run_<name>_test.m` and adapt the TEST-SPECIFIC
-parts. Typical adaptations:
+after each pulse) to `users/<owner>/tests/run_<name>_test.m` for one user's work, or to
+`src/measurement/run_<name>_test.m` for a test meant for everyone, and adapt the
+TEST-SPECIFIC parts. Typical adaptations:
 
 - **Pulse-width sweep at fixed amplitude:** `cfg.sequence.amplitudes_V = 1.2*ones(1,5)`,
   `cfg.sequence.widths_s = [10e-6 20e-6 50e-6 100e-6 200e-6]`, with a write-verify reset

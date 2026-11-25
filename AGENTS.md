@@ -9,7 +9,13 @@ over Ethernet or GPIB, to characterise memristive / RRAM devices. Reads and DC s
 the SMU; write pulses use the PMU, which has **no current compliance**. A mistake here
 destroys a device or wastes a day of someone's measurement time. Follow this file exactly.
 
-- Reply to the user in the language they write in. Write code, comments and file names in English.
+- Reply to the user in the language they write in; chat may be in any language. Everything
+  that belongs to the kit is English: code, comments, file names, docs, templates,
+  `HANDOFF.md`, every `CLAUDE.md`. Inside `users/<name>/`, the person's own notes, README,
+  device IDs, sample names, analysis files and data labels may be in any language (Chinese,
+  Korean, ...). MATLAB file and function names and the `users/<name>` folder name stay ASCII
+  (MATLAB identifier rules).
+- Day-to-day procedure for people and agents: [docs/00_SOP.md](docs/00_SOP.md).
 - Read, in this order, before your first hardware action in a session:
   1. this file
   2. [docs/05_safety.md](docs/05_safety.md) — safety layers, stop rules, recovery
@@ -62,10 +68,13 @@ These rules have no exceptions. If a request conflicts with one, stop and say wh
 11. **After a killed MATLAB.** `onCleanup` does not run when the process is killed. Run
     `test_instrument_connection` (it resets the 4200A and turns every PMU and SMU output
     off) before anything else, and report what it printed.
-12. **Data is append-only.** Never edit, move or delete files under `data/raw/`. Every run
-    gets its own new directory. Analysis writes new files next to, not over, the raw CSV.
-13. **No device-specific code in `src/`.** Device numbers live in a `config/device_*.m`
-    file. Generic code must not branch on a device name.
+12. **Data is append-only.** Never edit, move or delete files under `data/raw/` or any
+    `users/<name>/data/raw/`. Every run gets its own new directory. Analysis writes new files
+    next to, not over, the raw CSV.
+13. **No device- or user-specific code in `src/`.** Device numbers live in
+    `users/<owner>/config/device_*.m` (kit-level files such as the resistor bring-up in
+    `config/`). A user's own tests and analysis live in `users/<owner>/tests/` and
+    `analysis/`. Generic code must not branch on a device or user name.
 14. **Report faithfully.** State failures, aborts, clamped pulses, initialisation misses and
     skipped steps plainly, with numbers. Never present simulator or mock output as device
     data.
@@ -76,7 +85,17 @@ These rules have no exceptions. If a request conflicts with one, stop and say wh
 16. **Forming and first SET use the SMU.** Never form or first-SET a fresh device with the
     PMU. Use a DC sweep or `cfg.pulse.timing_source = 'pc'`, with a low compliance.
 17. **One controller.** Never drive the hardware while Clarius or another MATLAB session is
-    in control.
+    in control. `connect_instruments` enforces this between MATLAB sessions with a lock
+    (`data/instrument_lock.json`). `instrument_lock:InUse` means someone else is connected:
+    report who and wait. Never delete the lock or set `lock_allow_stale` to get past it;
+    only `test_instrument_connection` may clear a stale lock.
+18. **One user's folder at a time.** This PC is shared; each person has `users/<name>/`
+    ([users/README.md](users/README.md)) and normally opens their Claude session in it, so
+    `users/<name>/CLAUDE.md` says whose work it is. In a session opened at the kit root, ask
+    whose work a request is before writing a device file. Work only in that user's folder,
+    record progress in its `NOTES.md`, and never edit, move or delete files in another
+    user's folder unless that user asks. Changes to the shared kit are made only from a
+    session at the kit root.
 
 ---
 
@@ -84,7 +103,7 @@ These rules have no exceptions. If a request conflicts with one, stop and say wh
 
 ```
 config/default_config.m      every parameter, SI units, conservative defaults
-config/device_TEMPLATE.m     copy per device: config/device_<sample>_<R#C#>_<purpose>.m
+config/device_TEMPLATE.m     copy per device: users/<owner>/config/device_<sample>_<R#C#>_<purpose>.m
 src/instrument/              KXCI layer: transport (kxci_transact/write/query, reply
                              parsers), RPM path switching (kxci_select_path), connect,
                              configure, set_voltage, measure_current, apply_voltage_pulse
@@ -100,8 +119,23 @@ examples/                    one runnable example per test (+ load_run_csv, sim_
 tests/                       test_dry_run (simulator + KXCI mock), test_examples (simulator);
                              test_instrument_connection, test_read_only,
                              test_single_safe_pulse (real instrument)
-data/raw/<timestamp>_device_<id>_<test>/   one directory per run (created at run time)
+users/README.md              how the per-user folders work
+users/sync_users.ps1         add a user; regenerate every user's .claude/settings.json
+users/_TEMPLATE/             starting point for a new user (via sync_users.ps1)
+users/<name>/CLAUDE.md       loaded by sessions opened in that folder: whose work, limits
+users/<name>/NOTES.md        that user's progress log
+users/<name>/.claude/        settings.json: Claude may not edit the kit or other users' folders
+users/<name>/config/         that user's device files (owner set with apply_user_folder)
+users/<name>/tests/          that user's own tests and run scripts
+users/<name>/analysis/       that user's analysis scripts
+users/<name>/data/raw/<timestamp>_device_<id>_<test>/   one directory per run (at run time)
+data/raw/...                 kit-level runs only: resistor bring-up, dry run
 ```
+
+`setup_paths('<owner>')` puts the kit and that one user's `config/`, `tests/` and `analysis/`
+on the path; the kit stays in front, so a user file can never replace a kit function.
+`apply_user_folder(cfg, '<owner>')`, the first line after `default_config()` in every device
+file, sends the run's data to `users/<owner>/data/`.
 
 Layering: `instrument` → `safety` → `utilities` → `measurement` → `examples`.
 A lower layer never calls a higher one.
@@ -152,6 +186,7 @@ for anything missing: never guess a voltage, a compliance or a device ID.
 
 | Item | Value |
 |---|---|
+| Owner | `users/<name>` |
 | Device ID | `<sample>_<R#C#>_<purpose>` |
 | Test function | e.g. `run_ltp_ltd_test` |
 | Mode | simulation / real instrument |
@@ -196,13 +231,15 @@ simulation, show it to the user, and use it only after they approve.
 
 ### Step 2 — write the device file
 
-Copy `config/device_TEMPLATE.m` to `config/device_<id>.m`, rename the function, and fill in
-the values from the table. Keep `simulate_instrument = true` for now.
+If `users/<owner>/` does not exist, copy `users/_TEMPLATE/` to it. Copy
+`config/device_TEMPLATE.m` to `users/<owner>/config/device_<id>.m`, rename the function, set
+the owner line to `cfg = apply_user_folder(cfg, '<owner>');`, and fill in the values from
+the table. Keep `simulate_instrument = true` for now.
 
 ### Step 3 — rehearse in simulation
 
 ```matlab
-setup_paths; cfg = device_<id>(); r = run_<test>(cfg);
+setup_paths('<owner>'); cfg = device_<id>(); r = run_<test>(cfg);
 ```
 
 Check the printed checkpoint, the pulse estimate, the CSV columns and the plot.
@@ -237,13 +274,15 @@ runs, and only together with the user-approved gates.
 ## 4. Running MATLAB from an agent
 
 - MATLAB executable: ask the user for the path on their machine, then run headless with
-  `matlab -batch "cd('<kit>'); setup_paths; ..."`.
+  `matlab -batch "cd('<kit>'); setup_paths('<owner>'); ..."` (`setup_paths` alone for
+  kit-level work: dry run, bring-up).
 - Simulation-only jobs can run in the foreground.
 - Real-instrument jobs longer than a minute: run in the background, with `run_in_background`
   (or your tool's equivalent) and a timeout above the estimated duration (rule 10). Put
   a multi-line job in a `.m` script file instead of a long `-batch` string.
-- Watch progress through the newest `data/raw/*` directory: `measurement_data.csv` grows one
-  row per measurement and `instrument_log.txt` logs every command.
+- Watch progress through the newest `users/<owner>/data/raw/*` directory (`data/raw/*` for
+  kit-level runs): `measurement_data.csv` grows one row per measurement and
+  `instrument_log.txt` logs every command.
 - Judge whether a job is alive from **log growth**, not from the process list: crashed MATLAB
   processes can linger.
 - A `-batch` call can exit non-zero after the work finished (MATLAB shutdown noise). Decide
@@ -255,6 +294,19 @@ runs, and only together with the user-approved gates.
 
 ## 5. Writing a new test or changing code
 
+**A test for one user's work** goes in that user's folder:
+
+1. Copy `examples/example_custom_test_skeleton.m` to `users/<owner>/tests/run_<name>_test.m`.
+   Pick a name no kit function uses (`setup_paths` warns on a clash, and the kit's version
+   runs). Rename the function. Change only the TEST-SPECIFIC parts.
+2. Its `cfg.<name>.*` block lives in the user's device file, with conservative values and
+   comments. The voltages still pass through `set_voltage` / `apply_voltage_pulse` and the
+   `cfg.safety.*` limits.
+3. Run it on the simulator (rule 4) and `checkcode` it (0 messages). Do not touch the kit to
+   make it run; if it needs a kit change, that change follows the steps below.
+
+**A test meant for every user** goes in the kit:
+
 1. Copy `examples/example_custom_test_skeleton.m` to `src/measurement/run_<name>_test.m`.
    Rename the function. Change only the TEST-SPECIFIC parts.
 2. Add the new `cfg.<name>.*` block to `config/default_config.m` with conservative values
@@ -262,13 +314,16 @@ runs, and only together with the user-approved gates.
 3. Add the test to the suite list in `tests/test_dry_run.m` (and its tiny settings to
    `local_small_config`).
 4. Run `test_dry_run` (0 failures) and `checkcode` (0 messages).
-5. Use only KXCI commands already in [docs/04_kxci_cheatsheet.md](docs/04_kxci_cheatsheet.md).
-   A new command must first be checked against the KXCI programming manual
-   (4200A-KXCI-907-01), sent once with every output off on a resistor with its reply
-   checked, and added to `KxciMock` so the dry run exercises it.
-6. Do not change the safety functions (`src/safety/`, `set_voltage`, `apply_voltage_pulse`,
-   `kxci_select_path`, `kxci_force_safe`, `validate_config` limits) unless the user asks for
-   that specific change.
+
+For both:
+
+- Use only KXCI commands already in [docs/04_kxci_cheatsheet.md](docs/04_kxci_cheatsheet.md).
+  A new command must first be checked against the KXCI programming manual
+  (4200A-KXCI-907-01), sent once with every output off on a resistor with its reply
+  checked, and added to `KxciMock` so the dry run exercises it.
+- Do not change the safety functions (`src/safety/`, `set_voltage`, `apply_voltage_pulse`,
+  `kxci_select_path`, `kxci_force_safe`, `validate_config` limits) unless the user asks for
+  that specific change.
 
 ---
 

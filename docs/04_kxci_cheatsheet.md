@@ -19,10 +19,14 @@ are about it.
 | Item | Kit setting | Status |
 |---|---|---|
 | Ethernet resource | `TCPIP0::<ip>::<port>::SOCKET` (raw socket) | Example |
-| Port | set in KCon; Keithley's examples use 1225 | Example (default not confirmed) |
-| Terminator over Ethernet | NUL (`cfg.instrument.terminator = 0`) | Example |
-| Reply to a command without data | an acknowledge, matched by `cfg.instrument.ack_pattern = '^ACK'` | **UNVERIFIED** (item A) |
-| Error query | none (`cfg.instrument.error_query = ''`) | **UNVERIFIED** (item I) |
+| Port | set in KCon; Keithley's examples use 1225 | Verified 2026-11-24: this 4200A uses **5230** |
+| Terminator over Ethernet | NUL (`cfg.instrument.terminator = 0`) | Verified 2026-11-24 (item A): replies arrive NUL-terminated even though KCon shows String Terminator = LF (that setting appears to apply to GPIB) |
+| Reply to a command without data | an acknowledge, matched by `cfg.instrument.ack_pattern = '^ACK'` | Verified 2026-11-24 (item A): the reply is exactly `ACK`. Whether an *unknown* command also gets `ACK` is item I |
+| Error query | none (`cfg.instrument.error_query = ''`) | **NEEDED** — item I failed 2026-11-24: the unknown command `XX9` was answered `ACK`, so `ACK` alone does not show a command was accepted. The KXCI window logs the error as `KXCI command error. (-992)` and the SRQ lamp lights. Candidates below |
+| `:ERROR:LAST:GET` / `:ERROR:LAST:CLEAR` | last error message, e.g. `KXCI command error. (-992)`; read is non-destructive | Manual Rev F p. 4-3; **added in Clarius V1.13** (release notes CLS-979) → **not available on this 4200A (V1.12)** |
+| `SP` | status byte over Ethernet (decimal). B0 = 1 data ready, B1 = 2 syntax error (set by an invalid command), B4 = 16 busy, B6 = 64 RQS (set with B1). B1/B6 clear when serial polled | Manual Rev F p. 3-14, 4-6; used over Ethernet in app note 1KW-74006-1. Presence in V1.12 inferred, **not yet tried** |
+
+Manual Rev F p. 2-2 (2026-11-24 lookup): "Commands must always be terminated with null"; commands without data answer `ACK\0`, including unknown ones; data replies end with the KCon terminator plus NUL; errors show only in the KXCI window. From **V1.15** (Feb 2026) KXCI Ethernet is based on HiSLIP/VISA (`TCPIP0::<ip>::hislip0,<port>::INSTR`); whether the raw socket this kit uses still works there is not confirmed.
 
 Every exchange goes through `kxci_transact`. In ack mode every command's reply is read, so a
 reply can never be mistaken for the data of the next query.
@@ -33,7 +37,7 @@ reply can never be mistaken for the data of the next query.
 |---|---|---|---|
 | `BC` | clear the reading buffer | `connect_instruments` | Example |
 | `*RST` | reset all modules to their defaults (outputs off) | `connect_instruments` | Example |
-| `*IDN?` | identity | `connect_instruments` | **UNVERIFIED** (a missing reply is tolerated) |
+| `*IDN?` | identity | `connect_instruments` | Verified 2026-11-24: `KEITHLEY INSTRUMENTS,KI4200A,<serial>,V1.12` (last field = Clarius version) |
 
 ## SMU, user mode
 
@@ -42,13 +46,20 @@ reply can never be mistaken for the data of the next query.
 | `US` | enter SMU user mode | `kxci_select_path`, `kxci_force_safe` | Example |
 | `DV1, 1, 0.1, 1e-3` | SMU1: 20 V source range (code 1), 0.1 V, 1 mA compliance | `set_voltage` | Example |
 | `DV1` | SMU1 output off | `kxci_force_safe` | Example |
-| `TI1` | measure SMU1 current, reply is one reading | `measure_current` | Example; reply format **UNVERIFIED** (item B) |
+| `TI1` | measure SMU1 current, reply is one reading | `measure_current` | Example. Reply form verified 2026-11-24: `NAI-14.74702E-12` (4145-style: status `N` normal, channel `A`, quantity `I`); parsed correctly. Status `C` (compliance) not yet seen |
 
 The compliance is an argument of every `DV`, so `set_voltage` resends it each time.
 `kxci_parse_reading` accepts a bare number or the HP 4145-style prefix (`NAI+1.23E-06`:
 status, channel, quantity). Status `C` is counted as compliance (**UNVERIFIED**).
 
 ## RPM and PMU (segment ARB)
+
+**Every `:PMU:` command needs Clarius+ V1.13 or later** (manual Rev F p. 7-1: "available in
+Clarius+ versions 1.13 and later"; V1.13 release notes CLS-692; Keithley's GitHub PMU examples).
+V1.12 and earlier have only the two-letter PGU commands (`PS`, `PO`, `PT`, `PV`, `PG`, …, manual
+p. 7-62), without measurement. On this 4200A (V1.12) `:PMU:OUTPUT:STATE 1, 0` gave
+`KXCI command error. (-992)` (2026-11-24). Until Clarius is upgraded, nothing below works here,
+including the RPM path switching that `kxci_select_path` sends before SMU reads.
 
 | Command | Meaning | Used in | Status |
 |---|---|---|---|
@@ -61,7 +72,7 @@ status, channel, quantity). Status `C` is counted as compliance (**UNVERIFIED**)
 | `:PMU:SARB:SEQ:MEAS:TYPE 1, 1, …` | per segment: 0 none, 1 spot mean, 2 waveform | `pmu_run_sequence` | Inferred |
 | `:PMU:SARB:SEQ:MEAS:START / STOP 1, 1, …` | measurement window, relative to each segment's start | `pmu_run_sequence` | Inferred |
 | `:PMU:SARB:WFM:SEQ:LIST 1, 1, 1` | CH1 runs sequence 1 once | `pmu_run_sequence` | Example |
-| `:PMU:OUTPUT:STATE 1, 1` / `1, 0` | CH1 output on / off | `pmu_run_sequence`, `kxci_force_safe` | Example |
+| `:PMU:OUTPUT:STATE 1, 1` / `1, 0` | CH1 output on / off | `pmu_run_sequence`, `kxci_force_safe` | Example. **Rejected on this 4200A (Clarius V1.12), 2026-11-24**: `1, 0` → `KXCI command error. (-992)` in the KXCI window (sent after `*RST`, without `:PMU:INIT`). Either V1.12 lacks the PMU commands or the command needs `:PMU:INIT` first — not yet resolved |
 | `:PMU:EXECUTE` | run the test | `pmu_run_sequence` | Example |
 | `:PMU:TEST:STATUS?` | 1 = running, 0 = idle | `pmu_run_sequence` | Example |
 | `:PMU:DATA:COUNT? 1` | number of points for CH1 | `pmu_run_sequence` | Example |

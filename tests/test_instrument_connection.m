@@ -42,6 +42,10 @@ if nargin < 1 || isempty(cfg)
     cfg.mode.simulate_instrument = false;   % this test is about real hardware
     cfg.mode.dry_run             = true;    % never enable an output
 end
+% This is the recovery step after a killed MATLAB: it may take over the lock
+% that MATLAB left behind (never one held by a running session), and then
+% turns every output off.
+cfg.instrument.lock_allow_stale = true;
 
 fprintf('\n================================================================\n');
 fprintf(' MINIMAL 4200A CONNECTION TEST (KXCI)\n');
@@ -57,15 +61,18 @@ ok   = false;
 inst = [];
 identity = struct();
 
-% Guarantee every output is off no matter how this function exits.
-cleanup = onCleanup(@() local_cleanup(inst));
-
 try
     % ---- 1. connect ----------------------------------------------------
     fprintf('[1/5] Connecting ... ');
     if exist(cfg.log_root, 'dir') ~= 7; mkdir(cfg.log_root); end
     inst = connect_instruments(cfg, struct('instrument_log', ...
         fullfile(cfg.log_root, 'connection_test.log')));
+    % Guarantee every output is off no matter how this function exits,
+    % Ctrl+C included. Built only now: an anonymous function captures the
+    % value `inst` has when it is created, so a guard made while inst was []
+    % could never turn anything off. InstrumentSession is a handle, so this
+    % guard sees the live session.
+    cleanup = onCleanup(@() local_cleanup(inst));
     fprintf('OK (%s)\n', inst.Resource);
 
     % ---- 2. identity ---------------------------------------------------

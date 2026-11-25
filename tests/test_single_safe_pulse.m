@@ -52,12 +52,16 @@ fprintf('================================================================\n');
 
 ok   = false;
 inst = [];
-cleanup = onCleanup(@() local_cleanup(inst));
 
 try
     cfg = validate_config(cfg);
     run = create_run_directory(cfg, 'single_safe_pulse');
     inst = connect_instruments(cfg, run);
+    % Output-off guard for every exit, Ctrl+C included. Built only now: an
+    % anonymous function captures the value `inst` has when it is created,
+    % so a guard made while inst was [] could never turn anything off.
+    % InstrumentSession is a handle, so this guard sees the live session.
+    cleanup = onCleanup(@() local_cleanup(inst));
 
     % ---- 1. contact + baseline ------------------------------------------
     fprintf('[1/4] Contact check and baseline read ...\n');

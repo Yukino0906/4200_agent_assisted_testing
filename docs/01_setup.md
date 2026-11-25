@@ -43,8 +43,9 @@ accepts commands over Ethernet or GPIB. Nothing is installed on the 4200A.
    setup_paths            % once per MATLAB session
    test_dry_run           % simulation and KXCI mock only; must end with "0 failed"
    ```
-4. Put the address into your device file (`config/device_TEMPLATE.m` shows the block):
-   `cfg.instrument.host`, `cfg.instrument.port`, `cfg.instrument.resource_candidates`.
+4. Put the address into `config/default_config.m` (it belongs to the setup; device files
+   inherit it): `cfg.instrument.transport`, `cfg.instrument.host`, `cfg.instrument.port`.
+   The VISA resource string is built from them there.
 
 GPIB instead of Ethernet: set the GPIB address in KCon, use
 `cfg.instrument.resource_candidates = {"GPIB0::17::INSTR"}`, `cfg.instrument.terminator = "LF"`
@@ -98,12 +99,15 @@ runs, see [05_safety.md](05_safety.md) section 6.
 ```
 4200A_agent_kit/
 ├── README.md, AGENTS.md, CLAUDE.md
-├── setup_paths.m
-├── config/      default_config.m, device_TEMPLATE.m, your device_*.m files
+├── setup_paths.m, check_setup.m
+├── config/      default_config.m, device_TEMPLATE.m, kit-level device files (bring-up)
 ├── src/         instrument/ (KXCI, RPM, PMU, KxciMock), safety/, utilities/, measurement/
 ├── examples/    example_*.m, load_run_csv.m, sim_config.m, save_run_figure.m
 ├── tests/       test_dry_run.m, test_examples.m, test_instrument_connection.m,
 │                test_read_only.m, test_single_safe_pulse.m
 ├── docs/        01–07
-└── data/        created at run time: raw/, metadata/, logs/
+├── users/       one folder per person (see users/README.md)
+│   ├── _TEMPLATE/   copy to users/<name>/
+│   └── <name>/      config/ (device files), tests/, analysis/, data/ (at run time)
+└── data/        kit-level runs only, created at run time: raw/, metadata/, logs/
 ```

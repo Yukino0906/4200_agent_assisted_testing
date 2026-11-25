@@ -53,14 +53,16 @@ instrument. The state of this particular setup and the next steps are in
 3. **Bring-up on resistors**: [docs/07_bring_up.md](docs/07_bring_up.md). It checks every
    KXCI assumption the kit makes (acknowledge text, reply format, RPM path codes, pulse
    timing, current sign, the software current limit). Fill in its record.
-4. Copy `config/device_TEMPLATE.m` to `config/device_<sample>_<R#C#>_<purpose>.m`, rename the
-   function inside, fill in the device ID, voltage ceiling, compliance, read bias and the
-   PMU current limits. Set `cfg.mode.simulate_instrument = false` and `cfg.mode.dry_run = false`.
+4. Make your folder (`users/_TEMPLATE` → `users/<you>`, see [users/README.md](users/README.md)).
+   Copy `config/device_TEMPLATE.m` to `users/<you>/config/device_<sample>_<R#C#>_<purpose>.m`,
+   rename the function inside, set the owner line to `apply_user_folder(cfg, '<you>')`, fill
+   in the device ID, voltage ceiling, compliance, read bias and the PMU current limits. Set
+   `cfg.mode.simulate_instrument = false` and `cfg.mode.dry_run = false`.
 5. Read the numbers once more, then set `cfg.safety.compliance_confirmed`,
    `cfg.safety.limits_confirmed` and `cfg.pmu.no_compliance_acknowledged` to `true`.
    Nothing runs on hardware until you do.
-6. Land the probes, then: `cfg = device_<...>(); test_read_only(cfg)` — contact check and
-   ten reads.
+6. Land the probes, then: `setup_paths('<you>'); cfg = device_<...>(); test_read_only(cfg)` —
+   contact check and ten reads.
 7. A small DC I-V first (`example_iv(cfg)`, ±0.5–1.0 V, 3 cycles); forming and the first SET
    only with the SMU.
 8. `test_single_safe_pulse(cfg)` — width check at the read voltage, then one gentle PMU pulse.
@@ -82,10 +84,19 @@ for `y`.
 The agent must not raise voltage, compliance or PMU current limits, skip checks, or
 confirm the safety flags on its own. If it tries, stop it.
 
+## Several people on one PC
+
+The kit (`config/default_config.m`, `config/device_TEMPLATE.m`, `src/`, `examples/`,
+`tests/`, `docs/`) is shared. Each person's device files, own tests, analysis scripts and
+data live in `users/<name>/`: see [users/README.md](users/README.md). Start a session with
+`setup_paths('<name>')`, and open Claude Code with your own `users/<name>/` folder as the
+working directory. The daily procedure is in [docs/00_SOP.md](docs/00_SOP.md).
+
 ## Where the data goes
 
 ```
-data/raw/<yyyy-mm-dd_HHMMSS>_device_<id>_<test>/
+users/<name>/data/raw/<yyyy-mm-dd_HHMMSS>_device_<id>_<test>/
+                           (data/raw/... for kit-level runs: bring-up, dry run)
     measurement_data.csv   one row per measurement, written as it happens
     metadata.json / .mat   instrument, full configuration, status
     run_summary.txt        what ran, how it ended
@@ -94,7 +105,7 @@ data/raw/<yyyy-mm-dd_HHMMSS>_device_<id>_<test>/
 ```
 
 Load a run with `T = load_run_csv(r)` (or `load_run_csv('<run folder>')`).
-Never edit files under `data/raw/`.
+Never edit files under any `data/raw/`.
 
 ## Stopping
 
@@ -106,6 +117,7 @@ Never edit files under `data/raw/`.
 
 | File | For | Content |
 |---|---|---|
+| [docs/00_SOP.md](docs/00_SOP.md) | everyone | **start here on the lab PC**: roles, daily procedure, ending a session, recovery |
 | [docs/01_setup.md](docs/01_setup.md) | everyone | software, network, KCon/KXCI, wiring, folder layout |
 | [docs/02_how_to_ask_agent.md](docs/02_how_to_ask_agent.md) | people | request template and examples for every test |
 | [docs/03_test_recipes.md](docs/03_test_recipes.md) | everyone | each test: procedure, parameters, outputs, mistakes |

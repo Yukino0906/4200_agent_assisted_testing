@@ -49,12 +49,16 @@ fprintf('  NO write pulses are applied by this test.\n\n');
 
 ok   = false;
 inst = [];
-cleanup = onCleanup(@() local_cleanup(inst));
 
 try
     cfg = validate_config(cfg);
     run = create_run_directory(cfg, 'read_only_check');
     inst = connect_instruments(cfg, run);
+    % Output-off guard for every exit, Ctrl+C included. Built only now: an
+    % anonymous function captures the value `inst` has when it is created,
+    % so a guard made while inst was [] could never turn anything off.
+    % InstrumentSession is a handle, so this guard sees the live session.
+    cleanup = onCleanup(@() local_cleanup(inst));
 
     % ---- contact check --------------------------------------------------
     fprintf('[1/3] Contact check ...\n');

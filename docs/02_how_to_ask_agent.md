@@ -12,8 +12,9 @@ the result. It cannot see your device, and it must not guess the numbers that pr
    duration, outputs.
 3. Asks for anything you did not specify.
 4. Waits for your explicit "yes".
-5. Writes `config/device_<id>.m`, rehearses on the simulator, then runs on the instrument
-   (small version first when it is a new device or a new test).
+5. Writes `users/<you>/config/device_<id>.m`, rehearses on the simulator, then runs on the
+   instrument (small version first when it is a new device or a new test). Your data go to
+   `users/<you>/data/`.
 6. Reports status, run directory, key numbers and the plot.
 
 The two safety confirmation flags stay `false` until you approve the limits in chat. You
@@ -24,6 +25,7 @@ can also edit them yourself in the device file.
 Copy, fill in, delete what does not apply.
 
 ```text
+User:          <your folder under users/>   (e.g. alice)
 Device:        <sample>_<R#C#>_<purpose>    (e.g. chipA_R9C9_ltp)
 Test:          IV / LTP-LTD / single-pulse map / endurance / retention / read noise / relaxation / other: ...
 Mode:          simulation only | real instrument

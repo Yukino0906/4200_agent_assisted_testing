@@ -19,9 +19,12 @@ function inst = connect_instruments(cfg, run)
 %   not be driving the hardware at the same time.
 %
 %   Connection procedure:
-%       open transport -> terminator (NUL over Ethernet) -> timeout
+%       claim the instrument lock (real transports only, INSTRUMENT_LOCK)
+%       -> open transport -> terminator (NUL over Ethernet) -> timeout
 %       -> BC, *RST (when cfg.instrument.reset_on_connect) -> *IDN?
 %   Nothing is driven here: no SMU level is set and no PMU output is enabled.
+%   The lock is released again when opening or setting up fails, and by
+%   DISCONNECT_INSTRUMENTS.
 %
 %   Inputs:
 %       cfg - configuration struct (must have passed validate_config)
@@ -35,6 +38,9 @@ function inst = connect_instruments(cfg, run)
 %   Exceptions:
 %       connect_instruments:NoTransport  visadev / tcpclient unavailable
 %       connect_instruments:AllFailed    no candidate resource responded
+%       instrument_lock:InUse            another running session controls the 4200A
+%       instrument_lock:Stale            a killed MATLAB left the lock; run
+%                                        test_instrument_connection first
 %
 %   See also CONFIGURE_INSTRUMENTS, DISCONNECT_INSTRUMENTS, SAFE_OUTPUT_OFF.
 
@@ -63,12 +69,31 @@ if cfg.mode.simulate_instrument
     return;
 end
 
-% ---------------------------------------------------------------- open
+% ---------------------------------------------------------------- claim
+% One controller at a time (AGENTS.md rule 17): several people share this PC.
+% The software stand-in needs no lock.
 transport = lower(char(cfg.instrument.transport));
+lockFile  = '';
+if ~strcmp(transport, 'mock') && isfield(cfg.instrument, 'lock_file') && ...
+        ~isempty(cfg.instrument.lock_file)
+    lockFile   = char(cfg.instrument.lock_file);
+    allowStale = isfield(cfg.instrument, 'lock_allow_stale') && cfg.instrument.lock_allow_stale;
+    who = struct('user', local_field(cfg, 'user'), 'note', local_field(run, 'run_id'));
+    li  = instrument_lock('acquire', lockFile, who, allowStale);
+    if li.took_over_stale
+        log_message(inst, 'WARN', ['Took over a stale 4200A lock left by user "%s" ' ...
+            '(MATLAB PID %d, since %s); that MATLAB is no longer running.'], ...
+            li.previous.user, li.previous.pid, li.previous.since);
+    end
+    log_message(inst, 'INFO', 'Instrument lock claimed: %s', lockFile);
+end
+
+% ---------------------------------------------------------------- open
 dev = [];
 usedResource = '';
 lastErr = '';
 
+try
 switch transport
     case 'mock'
         dev = KxciMock(cfg);
@@ -123,8 +148,13 @@ switch transport
         error('connect_instruments:NoTransport', ...
             'Unknown cfg.instrument.transport "%s" (visa | tcpclient | mock).', transport);
 end
+catch openErr
+    local_release(lockFile);
+    rethrow(openErr);
+end
 
 if isempty(dev)
+    local_release(lockFile);
     error('connect_instruments:AllFailed', ...
         ['Could not open the KXCI connection (%s). Last error: %s\n' ...
          'Check: KXCI is running on the 4200A; KCon port/interface match; ' ...
@@ -186,6 +216,25 @@ catch setupErr
     end
     inst.Dev = [];
     inst.Connected = false;
+    local_release(lockFile);
     rethrow(setupErr);
+end
+end
+
+% ========================================================================
+function local_release(lockFile)
+% Never throws: called on failure paths.
+if isempty(lockFile); return; end
+try
+    instrument_lock('release', lockFile);
+catch
+end
+end
+
+function v = local_field(s, name)
+% Text field of a struct, '' when the struct or the field is missing.
+v = '';
+if isstruct(s) && isfield(s, name) && ~isempty(s.(name))
+    v = char(s.(name));
 end
 end
