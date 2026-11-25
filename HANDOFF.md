@@ -100,6 +100,9 @@ devices for SMU-only work needs the operator's explicit decision.
   former `-main` subfolder on 2026-11-24). Since 2026-11-24 it is a git working copy of
   `github.com/Yukino0906/4200_agent_assisted_testing` (public). git is the copy bundled with
   GitHub Desktop: `C:\Users\<user>\AppData\Local\GitHubDesktop\app-<version>\resources\app\git\cmd\git.exe`.
+  That git has no stored GitHub login, so an agent can commit but **cannot push**: push from
+  GitHub Desktop (repository added from this folder; "Push origin"). Personal folders and
+  `data/` are gitignored and never appear there.
 
 ### 3.2 4200A (KCon, photographed 2026-11-24)
 - **Clarius+ V1.12**, system software 4200A-852-1.12C, platform 4200A-300-4.
